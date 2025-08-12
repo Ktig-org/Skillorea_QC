@@ -204,7 +204,7 @@ def process_english_pdf(pdf_path):
                 
             else:
                 if qtype == "Short Answer":
-                    question_obj["mark"] = 3
+                    question_obj["mark"] = 2
                 elif qtype == "Long Answer":
                     question_obj["mark"] = 5
 
@@ -308,4 +308,5 @@ if __name__ == "__main__":
         process_english_pdf(pdf_file_path)
     else:
         print(f"❌ Error: PDF file not found at '{pdf_file_path}'")
+
 
