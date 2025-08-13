@@ -201,7 +201,7 @@ def process_social_science_pdf(pdf_path):
                 correct_option_index = None
                 if correct_answer_text and options:
                     try:
-                        correct_option_index = options.index(correct_answer_text) + 1
+                        correct_option_index = options.index(correct_answer_text)
                     except ValueError:
                         correct_option_index = None
                 question_obj["correctOptionIndex"] = correct_option_index
@@ -308,5 +308,6 @@ if __name__ == "__main__":
         process_social_science_pdf(pdf_file_path)
     else:
         print(f"❌ Error: PDF file not found at '{pdf_file_path}'")
+
 
 
