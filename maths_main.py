@@ -277,3 +277,4 @@ if __name__ == "__main__":
         print("Please update the 'pdf_file_path' variable in the `if __name__ == '__main__':` block.")
 
 
+
