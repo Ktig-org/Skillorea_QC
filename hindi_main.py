@@ -1,12 +1,12 @@
-import fitz  # PyMuPDF
+import docx
 import re
 import json
 import os
 import shutil
 
-def process_social_science_pdf(pdf_path):
-    output_folder = "output_social_science"
-    json_output_path = os.path.join(output_folder, "social_science_questions.json")
+def process_hindi_pdf(doc_path):
+    output_folder = "output_hindi"
+    json_output_path = os.path.join(output_folder, "hindi_questions.json")
     duplicate_output_path = os.path.join(output_folder, "duplicate_output.txt")
 
     # --- Step 1: Clean/Create Output Directory ---
@@ -16,39 +16,35 @@ def process_social_science_pdf(pdf_path):
 
     # --- Step 2: Extract and Structure Questions ---
     try:
-        doc = fitz.open(pdf_path)
+        doc = docx.Document(doc_path)
     except Exception as e:
-        print(f"❌ Error opening PDF: {e}")
+        print(f"❌ Error opening Word document: {e}")
         return
 
     remove_patterns = [
         r"(?i)^CBSE\s*[-–]?\s*GRADE\s*[-–]?\s*\d+\s*$",      # CBSE - GRADE – 6
         r"(?i)^GRADE\s*[-–]?\s*\d+\s*$",                      # GRADE – 6 or GRADE 6
-        r"(?i)^CBSE\s*$",                                    # CBSE             
-        r"(?i)^UNIT\s*[-–]?\s*\d+.*$",                        # UNIT – 4 SPORTS AND WELLNESS
-        r"(?i)^CHAPTER\s*[-–]?\s*\d+.*$",                     # CHAPTER – 3 or CHAPTER - 4 Text
+        r"(?i)^CBSE\s*$",                                    # CBSE
+        r"(?i)^हिंदी\s*$",                                    # हिंदी (Hindi)
+        r"(?i)^इकाई\s*[-–]?\s*\d+.*$",                        # इकाई – 4 (Unit – 4)
+        r"(?i)^अध्याय\s*[-–]?\s*\d+.*$",                      # अध्याय – 3 (Chapter – 3)
         r"^\d{1,3}\s*$",                                     # Just a number like 1, 23, 100
         r"^\s*$",                                            # Blank lines
         r"^---\s*Page\s*\d+\s*---$",                          # --- Page 5 ---
         r"^(?=.*\bCBSE\b)(?=.*\bGRADE\b)[A-Z\s\-–0-9]*$",      # Line has both CBSE and GRADE in uppercase
-        r"(?i)^(?=(?:.*\b(answer|following|questions|briefly|shortly)\b.*?){3,}).*$",
-        r"(?i)^Chapter\s+\d+\s*[:\-–]\s*.*$",
-        r"(?i)^SOCIAL SCIENCE\s*$", # Changed from MATHEMATICS
-        r"(?i)^CBSE\s*[-–:]?\s*GRADE\s*[:\-–]?\s*\d+\s*$",
-        r"(?i)^Page\s*\d+\s*$"
+        r"(?i)^(?=(?:.*\b(उत्तर|निम्नलिखित|प्रश्नों|संक्षेप में|संक्षिप्त)\b.*?){3,}).*$"  # Hindi equivalent of answer-related terms
     ]
     compiled_remove_patterns = [re.compile(pat, re.IGNORECASE) for pat in remove_patterns]
 
     main_question_pattern = re.compile(r"^(\d{1,3})[).]", re.IGNORECASE)
-    option_pattern = re.compile(r"^[A-D][).]\s*(.*)")
-
+    
     def should_remove_line(line):
         return any(pat.match(line.strip()) for pat in compiled_remove_patterns)
 
     def process_answer_line(line):
         stripped = line.strip()
         output_lines = []
-        if "answer:" in stripped.lower() and ":" in stripped:
+        if "उत्तर:" in stripped.lower() and ":" in stripped:
             output_lines.append("-----------------------------")
         output_lines.append(line)
         return output_lines
@@ -65,10 +61,8 @@ def process_social_science_pdf(pdf_path):
 
     all_lines = []
 
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        raw_text = page.get_text()
-        lines = raw_text.split("\n")
+    for para in doc.paragraphs:
+        lines = para.text.split("\n")
         cleaned_on_page = []
         for line in lines:
             line_stripped = line.strip()
@@ -87,8 +81,6 @@ def process_social_science_pdf(pdf_path):
 
         all_lines.extend(cleaned_compact)
 
-    doc.close()
-
     final_output_lines = insert_spacing_before_questions(all_lines)
 
     processed_final_lines = []
@@ -102,15 +94,12 @@ def process_social_science_pdf(pdf_path):
 
     lines_for_json = [line for line in processed_final_lines if line.strip()]
 
-    # --- MODIFICATION START: Changes are inside this function ---
     def parse_questions_by_number(all_lines):
         questions = []
         i = 0
         numbered_q_pattern = re.compile(r"^(\d+)[.)]\s*(.*)")
-        keyword_pattern = re.compile(r"^Keywords\s*[:：]", re.IGNORECASE)
         separator_pattern = re.compile(r"^[-]{3,}$")
-        mcq_option_pattern = re.compile(r"^[A-Z][.)]\s+(.*)")
-
+        
         while i < len(all_lines):
             line = all_lines[i].strip()
             match = numbered_q_pattern.match(line)
@@ -121,115 +110,138 @@ def process_social_science_pdf(pdf_path):
             current_q_num = int(match.group(1))
             qtype = ""
             if 1 <= current_q_num <= 150:
-                qtype = "MCQ"
+                qtype = "बहुविकल्पीय प्रश्न"  # MCQ
             elif 151 <= current_q_num <= 185:
-                qtype = "Short Answer"
+                qtype = "निम्नलिखित प्रश्नों के उत्तर लिखिए"  # Short Answer
             elif 186 <= current_q_num <= 200:
-                qtype = "Long Answer"
+                qtype = "निम्नलिखित प्रश्नों के उत्तर लिखिए"  # Long Answer
             else:
                 i += 1
                 continue
             
-            q_lines, options, answer_lines_raw, keyword_lines = [], [], [], []
+            q_lines, answer_lines_raw = [], []
             
+            # --- Gather all lines for the question block ---
             start_of_question_index = i
             while i < len(all_lines) and not separator_pattern.match(all_lines[i]):
                 current_line = all_lines[i].strip()
                 if i > start_of_question_index and numbered_q_pattern.match(current_line):
                     break
-                if qtype == "MCQ":
-                    option_match = mcq_option_pattern.match(current_line)
-                    if option_match:
-                        options.append(option_match.group(1).strip())
-                    else:
-                        q_lines.append(current_line)
-                else:
-                    q_lines.append(current_line)
+                q_lines.append(current_line)
                 i += 1
             
+            # --- Skip separator ---
             if i < len(all_lines) and separator_pattern.match(all_lines[i]):
                 i += 1
 
+            # --- Gather all lines for the answer block ---
             while i < len(all_lines):
                 current_line = all_lines[i].strip()
                 if numbered_q_pattern.match(current_line):
                     break
-                if keyword_pattern.match(current_line):
-                    keyword_content = current_line[current_line.find(":") + 1:].strip()
-                    keyword_lines.append(keyword_content)
-                    i += 1
-                    while i < len(all_lines):
-                        next_line = all_lines[i].strip()
-                        if numbered_q_pattern.match(next_line):
-                            break
-                        keyword_lines.append(next_line)
-                        i += 1
-                    break
-                else:
-                    answer_lines_raw.append(current_line)
-                    i += 1
+                answer_lines_raw.append(current_line)
+                i += 1
 
-            question_text = re.sub(r"^\d+[.)]\s*", "", " ".join(q_lines), count=1).strip()
+            question_text_raw = " ".join(q_lines)
+            question_text_raw = re.sub(r"^\d+[.)]\s*", "", question_text_raw, count=1).strip()
             
             question_obj = {
-                "questionNUM": f"pdf_{current_q_num}",
+                "questionNUM": f"doc_{current_q_num}",
                 "questionType": qtype,
-                "question": question_text,
                 "image": None,
             }
 
-            if qtype == "MCQ":
+            if qtype == "बहुविकल्पीय प्रश्न":
+                option_split_pattern = re.compile(r'\s+([क-घA-D][.)])\s*')
+                parts = option_split_pattern.split(question_text_raw)
+                
+                question_text = parts[0].strip()
+                options = [p.strip() for p in parts[2::2] if p.strip()]
+
+                question_obj["question"] = question_text
                 question_obj["options"] = options
                 question_obj["mark"] = 1
                 
                 full_answer_block = "\n".join(answer_lines_raw)
-                answer_letter_match = re.search(r'\b([A-D])\b', full_answer_block, re.IGNORECASE)
-                correct_answer_text = ""
-                
-                if answer_letter_match and options:
-                    answer_letter = answer_letter_match.group(1).upper()
-                    idx = ord(answer_letter) - ord('A')
-                    if 0 <= idx < len(options):
-                        correct_answer_text = options[idx]
-                
-                if not correct_answer_text:
-                    cleaned_answer_text = re.sub(r"^Answer:\s*", "", full_answer_block, flags=re.IGNORECASE).strip()
-                    correct_answer_text = cleaned_answer_text
 
-                question_obj["correctAnswer"] = correct_answer_text
+                # This version of the answer still has the option marker, e.g., "(C) राणा के आदेशों का पालन"
+                # It is useful for finding the correct option index via the letter if text matching fails.
+                answer_with_marker = re.sub(r"^(?:उत्तर:|Answer:)\s*", "", full_answer_block, flags=re.IGNORECASE).strip()
+                
+                # This version removes the marker, e.g., "राणा के आदेशों का पालन".
+                # This is the desired format for the "correctAnswer" field.
+                answer_without_marker = re.sub(r"^\s*\(?[क-घA-D]\)?\s*[.)]?\s*", "", answer_with_marker, flags=re.IGNORECASE).strip()
+                
+                # Assign the clean text (without the marker) to the correctAnswer field
+                question_obj["correctAnswer"] = answer_without_marker
 
                 correct_option_index = None
-                if correct_answer_text and options:
+                # First, try to find the index by matching the clean answer text exactly with one of the options.
+                if answer_without_marker and options:
                     try:
-                        correct_option_index = options.index(correct_answer_text) + 1
+                        correct_option_index = options.index(answer_without_marker)
                     except ValueError:
-                        correct_option_index = None
+                        # Fallback to a normalized comparison (case-insensitive, no whitespace)
+                        normalized_options = [re.sub(r'\s+', '', opt, flags=re.UNICODE).lower() for opt in options]
+                        normalized_text_to_find = re.sub(r'\s+', '', answer_without_marker, flags=re.UNICODE).lower()
+                        try:
+                            correct_option_index = normalized_options.index(normalized_text_to_find)
+                        except ValueError:
+                            correct_option_index = None
+
+                # If text matching fails, fall back to finding the option letter (e.g., 'ग' or 'C')
+                # in the answer text that still has the marker.
+                if correct_option_index is None:
+                    letter_match = re.search(r'\b([क-घ])\b', answer_with_marker) or re.search(r'\b([A-D])\b', answer_with_marker, re.IGNORECASE)
+                    if letter_match and options:
+                        letter = letter_match.group(1)
+                        hindi_map = {'क': 0, 'ख': 1, 'ग': 2, 'घ': 3}
+                        eng_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
+                        idx = hindi_map.get(letter) or eng_map.get(letter.upper())
+                        if idx is not None and 0 <= idx < len(options):
+                            correct_option_index = idx
+                
                 question_obj["correctOptionIndex"] = correct_option_index
                 
-            else:
-                if qtype == "Short Answer":
-                    question_obj["mark"] = 3
-                elif qtype == "Long Answer":
+            else: # "निम्नलिखित प्रश्नों के उत्तर लिखिए"
+                question_obj["question"] = question_text_raw
+                
+                if 151 <= current_q_num <= 185:
+                    question_obj["mark"] = 2
+                elif 186 <= current_q_num <= 200:
                     question_obj["mark"] = 5
 
-                cleaned_answer_text = re.sub(r"^Answer:\s*", "", "\n".join(answer_lines_raw).strip(), flags=re.IGNORECASE)
-                question_obj["correctAnswer"] = cleaned_answer_text
-                keywords_str = " ".join(keyword_lines)
-                question_obj["answerKeyword"] = [k.strip() for k in keywords_str.split(',') if k.strip()]
+                full_answer_text = "\n".join(answer_lines_raw)
+                full_answer_text = re.sub(r"^(?:उत्तर:|Answer:)\s*", "", full_answer_text.strip(), flags=re.IGNORECASE)
+                
+                keyword_marker_pattern = re.compile(r'(मुख्य\s*शब्द|मुख्य\s*वाक्\s*।?)\s*[:：]', re.IGNORECASE)
+                parts = keyword_marker_pattern.split(full_answer_text, 1)
+
+                final_answer = ""
+                keywords = []
+                if len(parts) > 2:  # Split successful
+                    final_answer = parts[0].strip()
+                    keys_string = parts[2].strip()
+                    keywords = [k.strip() for k in keys_string.split(',') if k.strip()]
+                else:  # No keyword marker found
+                    final_answer = full_answer_text.strip()
+                    keywords = []
+                
+                question_obj["correctAnswer"] = final_answer
+                question_obj["answerKeyword"] = keywords
             
             questions.append(question_obj)
 
         return questions
-    # --- MODIFICATION END ---
-    
+
     all_questions = parse_questions_by_number(lines_for_json)
     
-    # --- MODIFICATION START: Reorder dictionary keys for consistent JSON output ---
+    # --- Reorder dictionary keys for consistent JSON output ---
     ordered_questions = []
     for q in all_questions:
         q_type = q.get("questionType")
         
-        if q_type == "MCQ":
+        if q_type == "बहुविकल्पीय प्रश्न":
             ordered_q = {
                 "questionNUM": q.get("questionNUM"),
                 "question": q.get("question"),
@@ -240,7 +252,7 @@ def process_social_science_pdf(pdf_path):
                 "correctAnswer": q.get("correctAnswer"),
                 "mark": q.get("mark")
             }
-        elif q_type in ["Short Answer", "Long Answer"]:
+        elif q_type == "निम्नलिखित प्रश्नों के उत्तर लिखिए":
             ordered_q = {
                 "questionNUM": q.get("questionNUM"),
                 "question": q.get("question"),
@@ -254,12 +266,12 @@ def process_social_science_pdf(pdf_path):
             ordered_q = q
 
         ordered_questions.append(ordered_q)
-    # --- MODIFICATION END ---
 
+    # --- Save JSON output ---
     with open(json_output_path, "w", encoding="utf-8") as f:
         json.dump(ordered_questions, f, indent=4, ensure_ascii=False)
 
-    # --- Step 3: Duplicate Detection (Unchanged) ---
+    # --- Step 3: Duplicate Detection ---
     def normalize_question_text(text):
         return re.sub(r'\s+', '', text.lower()) if isinstance(text, str) else ""
 
@@ -283,10 +295,10 @@ def process_social_science_pdf(pdf_path):
                 mismatch.append("questionType mismatch")
             if str(item.get("correctAnswer")) != str(orig.get("correctAnswer")):
                 mismatch.append("correctAnswer mismatch")
-            if item.get("questionType", "").lower() == "mcq":
+            if item.get("questionType", "") == "बहुविकल्पीय प्रश्न":
                 mismatch.append(f"{count_option_mismatches(item.get('options'), orig.get('options'))} options mismatched")
             summary = f"DUPLICATE : {item['questionNUM']} duplicates {orig['questionNUM']} - {', '.join(mismatch) or 'all fields match'}"
-            reports.append(f"{summary}\n\nOriginal:\n{json.dumps(orig, indent=4)}\n\nDuplicate:\n{json.dumps(item, indent=4)}\n{'='*70}\n")
+            reports.append(f"{summary}\n\nOriginal:\n{json.dumps(orig, indent=4, ensure_ascii=False)}\n\nDuplicate:\n{json.dumps(item, indent=4, ensure_ascii=False)}\n{'='*70}\n")
         else:
             seen[norm] = item
 
@@ -296,16 +308,13 @@ def process_social_science_pdf(pdf_path):
         else:
             f.write("No duplicates found.\n")
 
-    print(f"✅ Extracted questions to {json_output_path}")
+    print(f"✅ Extracted {len(ordered_questions)} questions to {json_output_path}")
     print(f"✅ Duplicate report saved to {duplicate_output_path}")
-
 
 # --- Run ---
 if __name__ == "__main__":
-    # Using a raw string (r"...") for the Windows path to avoid issues with backslashes
-    pdf_file_path = r"E:\SUBJECTS_PDF\pdf\Chapter 5_200 Q & A_With Keywords_India That is Bharat  (2) (2).pdf"
-    if os.path.exists(pdf_file_path):
-        process_social_science_pdf(pdf_file_path)
+    doc_file_path = r"hindi_input\GRADE 6 HINDI CHAPTER 7 WITH KEY WORDS.docx"
+    if os.path.exists(doc_file_path):
+        process_hindi_pdf(doc_file_path)
     else:
-        print(f"❌ Error: PDF file not found at '{pdf_file_path}'")
-
+        print(f"❌ Error: Word document not found at '{doc_file_path}'")

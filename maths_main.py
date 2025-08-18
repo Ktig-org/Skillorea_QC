@@ -128,7 +128,7 @@ def process_maths_pdf(pdf_path):
                     idx = ord(answer_letter) - ord('A')
                     if 0 <= idx < len(options):
                         correct_answer_text = options[idx]
-                        correct_option_index = idx
+                        correct_option_index = idx + 1
                 
                 if not correct_answer_text:
                     cleaned_answer = re.sub(r'^[A-D]\)\s*', '', answer_part.strip()).strip()
@@ -156,7 +156,7 @@ def process_maths_pdf(pdf_path):
                 question_data["answerKeyword"] = [k.strip() for k in keywords_text.split(',') if k.strip()]
 
                 if question_type == "ShortAnswer":
-                    question_data["mark"] = 2
+                    question_data["mark"] = 3
                 elif question_type == "LongAnswer":
                     question_data["mark"] = 5
             
@@ -275,6 +275,3 @@ if __name__ == "__main__":
     else:
         print(f"Error: The specified PDF file does not exist at '{pdf_file_path}'")
         print("Please update the 'pdf_file_path' variable in the `if __name__ == '__main__':` block.")
-
-
-

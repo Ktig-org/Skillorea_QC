@@ -197,14 +197,14 @@ def process_english_pdf(pdf_path):
                 correct_option_index = None
                 if correct_answer_text and options:
                     try:
-                        correct_option_index = options.index(correct_answer_text)
+                        correct_option_index = options.index(correct_answer_text) + 1
                     except ValueError:
                         correct_option_index = None
                 question_obj["correctOptionIndex"] = correct_option_index
                 
             else:
                 if qtype == "Short Answer":
-                    question_obj["mark"] = 2
+                    question_obj["mark"] = 3
                 elif qtype == "Long Answer":
                     question_obj["mark"] = 5
 
@@ -308,6 +308,4 @@ if __name__ == "__main__":
         process_english_pdf(pdf_file_path)
     else:
         print(f"❌ Error: PDF file not found at '{pdf_file_path}'")
-
-
 
