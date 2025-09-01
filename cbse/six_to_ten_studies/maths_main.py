@@ -134,7 +134,7 @@ def process_maths_pdf(pdf_path):
                     cleaned_answer = re.sub(r'^[A-D]\)\s*', '', answer_part.strip()).strip()
                     correct_answer_text = cleaned_answer
                     if cleaned_answer in options:
-                        correct_option_index = options.index(cleaned_answer) + 1
+                        correct_option_index = options.index(cleaned_answer)
 
                 question_data["correctAnswer"] = correct_answer_text
                 question_data["correctOptionIndex"] = correct_option_index
@@ -156,7 +156,7 @@ def process_maths_pdf(pdf_path):
                 question_data["answerKeyword"] = [k.strip() for k in keywords_text.split(',') if k.strip()]
 
                 if question_type == "ShortAnswer":
-                    question_data["mark"] = 3
+                    question_data["mark"] = 2
                 elif question_type == "LongAnswer":
                     question_data["mark"] = 5
             
