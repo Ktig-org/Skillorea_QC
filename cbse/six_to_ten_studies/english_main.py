@@ -197,14 +197,14 @@ def process_english_pdf(pdf_path):
                 correct_option_index = None
                 if correct_answer_text and options:
                     try:
-                        correct_option_index = options.index(correct_answer_text) + 1
+                        correct_option_index = options.index(correct_answer_text) 
                     except ValueError:
                         correct_option_index = None
                 question_obj["correctOptionIndex"] = correct_option_index
                 
             else:
                 if qtype == "Short Answer":
-                    question_obj["mark"] = 3
+                    question_obj["mark"] = 2
                 elif qtype == "Long Answer":
                     question_obj["mark"] = 5
 
